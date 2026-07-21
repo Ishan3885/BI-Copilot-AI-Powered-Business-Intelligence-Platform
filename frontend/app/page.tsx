@@ -106,8 +106,12 @@ export default function Home() {
         content: `Dataset loaded! I can see **${data.rows} rows** and **${data.columns.length} columns** (${data.columns.join(", ")}). Ask me anything about your data!`,
       }]);
       await fetchSummaryAndCharts(data.columns);
-    } catch {
-      setError("Cannot connect to backend. Is the server running?");
+    } catch (err) {
+          if (err instanceof TypeError && err.message.includes("fetch")) {
+              setError("Backend se connect nahi ho pa raha — file bahut badi ho sakti hai ya server busy hai. Dobara try karo.");
+          } else {
+              setError("Something went wrong. Please try again.");
+          }
     } finally {
       setUploading(false);
     }
