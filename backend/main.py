@@ -26,6 +26,9 @@ app.add_middleware(
 
 uploaded_data = {}
 
+@app.get("/")
+def root():
+    return {"status": "BI Copilot API is running"}
 
 # ── Chat request format ──────────────────────────────────────────────
 class ChatRequest(BaseModel):
