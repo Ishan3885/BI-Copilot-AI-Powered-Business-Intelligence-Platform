@@ -15,20 +15,13 @@ app = FastAPI(title="BI Copilot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://bi-copilot-ai-powered-business-inte.vercel.app/",  # apna Vercel URL daalo
-        "*"  # ya sab allow karo
-    ],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 uploaded_data = {}
 
-@app.get("/")
-def root():
-    return {"status": "BI Copilot API is running"}
 
 # ── Chat request format ──────────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -75,7 +68,19 @@ def build_data_context(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-# ── 1. Upload ────────────────────────────────────────────────────────
+# ── 1. Root ──────────────────────────────────────────────────────────
+@app.get("/")
+def root():
+    return {"status": "BI Copilot API is running"}
+
+
+# ── 2. Health ────────────────────────────────────────────────────────
+@app.get("/health")
+def health():
+    return {"healthy": True}
+
+
+# ── 3. Upload ────────────────────────────────────────────────────────
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     if not file.filename.endswith(".csv"):
@@ -90,21 +95,21 @@ async def upload_file(file: UploadFile = File(...)):
     uploaded_data["current"] = df
 
     return {
-        "message": "File uploaded successfully",
+        "message":  "File uploaded successfully",
         "filename": file.filename,
-        "rows": len(df),
-        "columns": list(df.columns),
-        "preview": df.head(5).to_dict(orient="records"),
+        "rows":     len(df),
+        "columns":  list(df.columns),
+        "preview":  df.head(5).to_dict(orient="records"),
     }
 
 
-# ── 2. Summary ───────────────────────────────────────────────────────
+# ── 4. Summary ───────────────────────────────────────────────────────
 @app.get("/data/summary")
 def get_summary():
     if "current" not in uploaded_data:
         raise HTTPException(status_code=404, detail="Please upload a file first")
 
-    df = uploaded_data["current"]
+    df      = uploaded_data["current"]
     summary = []
 
     for col in df.columns:
@@ -128,7 +133,7 @@ def get_summary():
     return {"summary": summary}
 
 
-# ── 3. Bar chart ─────────────────────────────────────────────────────
+# ── 5. Bar chart ─────────────────────────────────────────────────────
 @app.get("/data/bar-chart")
 def get_bar_chart(category_col: str, numeric_col: str):
     if "current" not in uploaded_data:
@@ -150,7 +155,7 @@ def get_bar_chart(category_col: str, numeric_col: str):
     return {"data": grouped.to_dict(orient="records")}
 
 
-# ── 4. Line chart ────────────────────────────────────────────────────
+# ── 6. Line chart ────────────────────────────────────────────────────
 @app.get("/data/line-chart")
 def get_line_chart(x_col: str, y_col: str):
     if "current" not in uploaded_data:
@@ -167,7 +172,7 @@ def get_line_chart(x_col: str, y_col: str):
     return {"data": result.to_dict(orient="records")}
 
 
-# ── 5. Preview ───────────────────────────────────────────────────────
+# ── 7. Preview ───────────────────────────────────────────────────────
 @app.get("/data/preview")
 def get_preview():
     if "current" not in uploaded_data:
@@ -181,7 +186,7 @@ def get_preview():
     }
 
 
-# ── 6. Forecast ──────────────────────────────────────────────────────
+# ── 8. Forecast ──────────────────────────────────────────────────────
 @app.get("/ml/forecast")
 def forecast(numeric_col: str, periods: int = 5):
     if "current" not in uploaded_data:
@@ -196,7 +201,7 @@ def forecast(numeric_col: str, periods: int = 5):
         raise HTTPException(status_code=400, detail="Only numeric columns can be forecasted")
 
     values = df[numeric_col].dropna().values
-    n = len(values)
+    n      = len(values)
 
     if n < 3:
         raise HTTPException(status_code=400, detail="Need at least 3 rows for forecast")
@@ -231,7 +236,7 @@ def forecast(numeric_col: str, periods: int = 5):
     }
 
 
-# ── 7. Anomaly Detection ─────────────────────────────────────────────
+# ── 9. Anomaly Detection ─────────────────────────────────────────────
 @app.get("/ml/anomalies")
 def detect_anomalies(numeric_col: str, threshold: float = 2.0):
     if "current" not in uploaded_data:
@@ -271,27 +276,27 @@ def detect_anomalies(numeric_col: str, threshold: float = 2.0):
     }
 
 
-# ── 8. Chatbot ───────────────────────────────────────────────────────
+# ── 10. Chatbot ──────────────────────────────────────────────────────
 @app.post("/chat")
 def chat(request: ChatRequest):
     if "current" not in uploaded_data:
         raise HTTPException(
             status_code=404,
-            detail="Please upload a dataset first"
+            detail="Please upload a dataset first before asking questions"
         )
 
     df           = uploaded_data["current"]
     data_context = build_data_context(df)
     groq_key     = os.getenv("GROQ_API_KEY", "")
 
-    # Groq available hai toh use karo, warna Ollama fallback
+    # ── Groq (cloud) — production pe use hoga ───────────────────────
     if groq_key:
         headers = {
             "Authorization": f"Bearer {groq_key}",
             "Content-Type":  "application/json"
         }
         payload = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.1-8b-instant",
             "messages": [
                 {
                     "role":    "system",
@@ -319,12 +324,13 @@ def chat(request: ChatRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Groq error: {str(e)}")
 
-    # Fallback — Ollama (local)
+    # ── Ollama (local) — development pe fallback ─────────────────────
     else:
         ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         try:
             tags_res = requests.get(f"{ollama_url}/api/tags", timeout=5)
             models   = [m["name"] for m in tags_res.json().get("models", [])]
+
             if any("tinyllama" in m for m in models):
                 model_name = "tinyllama"
             elif any("llama3.2" in m for m in models):
@@ -332,9 +338,15 @@ def chat(request: ChatRequest):
             elif models:
                 model_name = models[0]
             else:
-                raise HTTPException(status_code=503, detail="No models found. Run: ollama pull tinyllama")
+                raise HTTPException(
+                    status_code=503,
+                    detail="No models found. Run: ollama pull tinyllama"
+                )
         except requests.exceptions.ConnectionError:
-            raise HTTPException(status_code=503, detail="Ollama not running. Run: ollama serve")
+            raise HTTPException(
+                status_code=503,
+                detail="Ollama not running. Run: ollama serve"
+            )
 
         payload = {
             "model":  model_name,
@@ -347,6 +359,7 @@ Question: {request.question}""",
             "stream":  False,
             "options": {"temperature": 0.3}
         }
+
         try:
             response = requests.post(
                 f"{ollama_url}/api/generate",
@@ -358,6 +371,9 @@ Question: {request.question}""",
             return {"question": request.question, "answer": answer}
 
         except requests.exceptions.ReadTimeout:
-            raise HTTPException(status_code=504, detail="Model timeout. Try again.")
+            raise HTTPException(
+                status_code=504,
+                detail="Model timeout. Try again."
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
