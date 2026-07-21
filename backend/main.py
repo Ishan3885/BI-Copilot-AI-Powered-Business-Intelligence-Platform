@@ -17,7 +17,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://bi-copilot.vercel.app",  # apna Vercel URL daalo
+        "https://bi-copilot-ai-powered-business-inte.vercel.app/",  # apna Vercel URL daalo
         "*"  # ya sab allow karo
     ],
     allow_methods=["*"],
