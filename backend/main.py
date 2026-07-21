@@ -15,7 +15,11 @@ app = FastAPI(title="BI Copilot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://bi-copilot.vercel.app",  # apna Vercel URL daalo
+        "*"  # ya sab allow karo
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
