@@ -93,32 +93,53 @@ export default function Home() {
   setError(null)
 
   try {
+    // File ko text mein padho
     const text = await file.text()
-    const rows = text.split("\n")
-    const header = rows[0]
+    const lines = text.trim().split("\n")
+    const header = lines[0]
 
-    // Pehle 1000 rows lo sirf
-    const chunk = [header, ...rows.slice(1, 1001)].join("\n")
-    const blob = new Blob([chunk], { type: "text/csv" })
-    const smallFile = new File([blob], file.name)
+    // Sirf 500 rows bhejo — safe limit
+    const safeLines = [header, ...lines.slice(1, 501)].join("\n")
+    const safeBlob = new Blob([safeLines], { type: "text/csv" })
+    const safeFile = new File([safeBlob], file.name, { type: "text/csv" })
 
     const form = new FormData()
-    form.append("file", smallFile)
+    form.append("file", safeFile)
 
-    const res = await fetch(`${API}/upload`, { method: "POST", body: form })
+    // Timeout add karo — 60 seconds
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 60000)
+
+    const res = await fetch(`${API}/upload`, {
+      method: "POST",
+      body: form,
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+
     const data = await res.json()
+    if (!res.ok) {
+      setError(data.detail || "Upload failed")
+      return
+    }
 
-    if (!res.ok) { setError(data.detail); return }
-
-    setResult({ ...data, rows: rows.length - 1, note: "Showing first 1000 rows" })
+    setResult(data)
     setMessages([{
       role: "assistant",
-      content: `Dataset loaded! Showing first 1000 rows of ${rows.length - 1} total rows. Columns: ${data.columns.join(", ")}. Ask me anything!`
+      content: `Dataset loaded! I can see **${data.rows} rows** and **${data.columns.length} columns** (${data.columns.join(", ")}). Total file had ${lines.length - 1} rows — showing first 500. Ask me anything!`,
     }])
     await fetchSummaryAndCharts(data.columns)
 
-  } catch {
-    setError("Something went wrong. Please try again.")
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      if (err.name === "AbortError") {
+        setError("Request timed out. Server busy hai — thodi der baad try karo.")
+      } else {
+        setError(`Error: ${err.message}`)
+      }
+    } else {
+      setError("Something went wrong. Please try again.")
+    }
   } finally {
     setUploading(false)
   }
