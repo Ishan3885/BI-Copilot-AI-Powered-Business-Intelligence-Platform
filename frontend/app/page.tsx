@@ -88,34 +88,41 @@ export default function Home() {
 
   // ── Upload ───────────────────────────────────────────────────────
   const handleUpload = async () => {
-    if (!file) return;
-    setUploading(true);
-    setError(null);
+  if (!file) return
+  setUploading(true)
+  setError(null)
 
-    const form = new FormData();
-    form.append("file", file);
+  try {
+    const text = await file.text()
+    const rows = text.split("\n")
+    const header = rows[0]
 
-    try {
-      const res  = await fetch(`${API}/upload`, { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) { setError(data.detail); return; }
+    // Pehle 1000 rows lo sirf
+    const chunk = [header, ...rows.slice(1, 1001)].join("\n")
+    const blob = new Blob([chunk], { type: "text/csv" })
+    const smallFile = new File([blob], file.name)
 
-      setResult(data);
-      setMessages([{
-        role:    "assistant",
-        content: `Dataset loaded! I can see **${data.rows} rows** and **${data.columns.length} columns** (${data.columns.join(", ")}). Ask me anything about your data!`,
-      }]);
-      await fetchSummaryAndCharts(data.columns);
-    } catch (err) {
-          if (err instanceof TypeError && err.message.includes("fetch")) {
-              setError("Backend se connect nahi ho pa raha — file bahut badi ho sakti hai ya server busy hai. Dobara try karo.");
-          } else {
-              setError("Something went wrong. Please try again.");
-          }
-    } finally {
-      setUploading(false);
-    }
-  };
+    const form = new FormData()
+    form.append("file", smallFile)
+
+    const res = await fetch(`${API}/upload`, { method: "POST", body: form })
+    const data = await res.json()
+
+    if (!res.ok) { setError(data.detail); return }
+
+    setResult({ ...data, rows: rows.length - 1, note: "Showing first 1000 rows" })
+    setMessages([{
+      role: "assistant",
+      content: `Dataset loaded! Showing first 1000 rows of ${rows.length - 1} total rows. Columns: ${data.columns.join(", ")}. Ask me anything!`
+    }])
+    await fetchSummaryAndCharts(data.columns)
+
+  } catch {
+    setError("Something went wrong. Please try again.")
+  } finally {
+    setUploading(false)
+  }
+}
 
   // ── Summary + Charts ─────────────────────────────────────────────
   const fetchSummaryAndCharts = async (columns: string[]) => {

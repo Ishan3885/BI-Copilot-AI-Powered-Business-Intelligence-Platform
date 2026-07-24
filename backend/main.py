@@ -88,34 +88,34 @@ async def upload_file(file: UploadFile = File(...)):
 
     contents = await file.read()
 
-    # File size check — 5MB limit
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 5MB.")
+    # Size check
+    size_mb = len(contents) / (1024 * 1024)
 
     try:
-        df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
+        # Badi file ke liye chunks mein read karo
+        if size_mb > 2:
+            df = pd.read_csv(
+                io.StringIO(contents.decode("utf-8")),
+                nrows=1000  # Sirf pehli 1000 rows
+            )
+        else:
+            df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not parse CSV: {str(e)}")
 
     if df.empty:
         raise HTTPException(status_code=400, detail="CSV file is empty")
 
-    # Bahut bada dataset — pehli 1000 rows lo
-    if len(df) > 1000:
-        df = df.head(1000)
-
-    # Bahut zyada columns — pehle 20 lo
-    if len(df.columns) > 20:
-        df = df.iloc[:, :20]
-
     uploaded_data["current"] = df
 
     return {
-        "message":  "File uploaded successfully",
-        "filename": file.filename,
-        "rows":     len(df),
-        "columns":  list(df.columns),
-        "preview":  df.head(5).to_dict(orient="records"),
+        "message":   "File uploaded successfully",
+        "filename":  file.filename,
+        "rows":      len(df),
+        "columns":   list(df.columns),
+        "preview":   df.head(5).to_dict(orient="records"),
+        "truncated": size_mb > 2,
+        "size_mb":   round(size_mb, 2),
     }
 
 
