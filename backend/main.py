@@ -86,39 +86,51 @@ async def upload_file(file: UploadFile = File(...)):
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
-    contents = await file.read()
-
-    # Size check
-    size_mb = len(contents) / (1024 * 1024)
-
     try:
-        # Badi file ke liye chunks mein read karo
-        if size_mb > 2:
-            df = pd.read_csv(
-                io.StringIO(contents.decode("utf-8")),
-                nrows=1000  # Sirf pehli 1000 rows
-            )
-        else:
-            df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
+        contents = await file.read()
+
+        # Multiple encodings try karo
+        df = None
+        for encoding in ["utf-8", "latin-1", "cp1252", "iso-8859-1"]:
+            try:
+                df = pd.read_csv(
+                    io.StringIO(contents.decode(encoding)),
+                    nrows=500,
+                    low_memory=False
+                )
+                break
+            except (UnicodeDecodeError, Exception):
+                continue
+
+        if df is None:
+            raise HTTPException(status_code=400, detail="Could not read file. Try saving CSV as UTF-8.")
+
+        if df.empty:
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+
+        # Memory safe karo — sirf useful columns rakho
+        if len(df.columns) > 20:
+            df = df.iloc[:, :20]
+
+        # NaN values clean karo
+        df = df.fillna("")
+
+        uploaded_data["current"] = df
+
+        return {
+            "message":  "File uploaded successfully",
+            "filename": file.filename,
+            "rows":     len(df),
+            "columns":  list(df.columns),
+            "preview":  df.head(5).to_dict(orient="records"),
+        }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not parse CSV: {str(e)}")
-
-    if df.empty:
-        raise HTTPException(status_code=400, detail="CSV file is empty")
-
-    uploaded_data["current"] = df
-
-    return {
-        "message":   "File uploaded successfully",
-        "filename":  file.filename,
-        "rows":      len(df),
-        "columns":   list(df.columns),
-        "preview":   df.head(5).to_dict(orient="records"),
-        "truncated": size_mb > 2,
-        "size_mb":   round(size_mb, 2),
-    }
-
-
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}")
+    
+    
 # ── 4. Summary ───────────────────────────────────────────────────────
 @app.get("/data/summary")
 def get_summary():
