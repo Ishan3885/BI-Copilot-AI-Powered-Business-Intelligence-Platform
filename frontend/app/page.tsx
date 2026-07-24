@@ -122,6 +122,7 @@ export default function Home() {
     const sumRes  = await fetch(`${API}/data/summary`);
     const sumData = await sumRes.json();
     setSummary(sumData.summary);
+    setSuggestedQs(generateSuggestedQuestions(sumData.summary));
 
     const cols: ColumnInfo[] = sumData.summary;
     const catCol = cols.find((c) => c.type === "categorical")?.column;
@@ -159,7 +160,35 @@ export default function Home() {
       setMlLoading(false);
     }
   };
+  // ── Dynamic suggested questions ──────────────────────────────────────
+const generateSuggestedQuestions = (cols: ColumnInfo[]) => {
+  const questions: string[] = []
 
+  const numCol = cols.find((c) => c.type === "numeric")?.column
+  const catCol = cols.find((c) => c.type === "categorical")?.column
+  const allNumCols = cols.filter((c) => c.type === "numeric").map((c) => c.column)
+  const allCatCols = cols.filter((c) => c.type === "categorical").map((c) => c.column)
+
+  if (numCol) {
+    questions.push(`What is the total ${numCol}?`)
+    questions.push(`What is the average ${numCol}?`)
+  }
+  if (catCol && numCol) {
+    questions.push(`Which ${catCol} has the highest ${numCol}?`)
+  }
+  if (allNumCols.length > 1) {
+    questions.push(`Which column has the most anomalies?`)
+  }
+  if (allCatCols.length > 0) {
+    questions.push(`How many unique ${allCatCols[0]} are there?`)
+  }
+  if (numCol) {
+    questions.push(`What is the trend in ${numCol}?`)
+  }
+
+  // Max 4 questions dikhao
+  return questions.slice(0, 4)
+}
   // ── Chat send ────────────────────────────────────────────────────
   const handleSend = async () => {
     const q = inputText.trim();
@@ -213,6 +242,12 @@ export default function Home() {
     ColumnInfo,
     { type: "numeric" }
   >[];
+  const [suggestedQs, setSuggestedQs] = useState<string[]>([
+  "What is the total sales?",
+  "Which product sold the most?",
+  "What is the average sales per region?",
+  "Are there any anomalies in the data?",
+  ])
 
   // ─────────────────────────────────────────────────────────────────
   return (
@@ -418,16 +453,11 @@ export default function Home() {
 
             {/* Suggested questions */}
             <div className="flex flex-wrap gap-2 mb-3">
-              {[
-                "What is the total sales?",
-                "Which product sold the most?",
-                "What is the average sales per region?",
-                "Are there any anomalies in the data?",
-              ].map((q) => (
+              {suggestedQs.map((q) => (
                 <button key={q} onClick={() => setInputText(q)}
                   className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300
                     border border-gray-600 px-3 py-1 rounded-full transition-colors">
-                  {q}
+                {q}
                 </button>
               ))}
             </div>
