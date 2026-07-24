@@ -173,18 +173,3 @@ ollama serve
 - [x] Phase 5 — AI Chatbot (Groq + Ollama)
 - [x] Phase 6 — Cloud Deployment (Vercel + Render)
 
----
-
-## 🤝 Contributing
-
-Pull requests are welcome! Please open an issue first to discuss what you would like to change.
-
----
-
-## 📄 License
-
-MIT License — free to use, modify, and distribute.
-
----
-
-> Built with ❤️ while learning Full-Stack AI Development
